@@ -1,0 +1,190 @@
+use [SQL Case Study]
+
+--Q1: What are total number of rows in each of the 3 tables in the database?
+select count (customer_id) as No_of_rows from Customer
+select count (prod_cat) from prod_cat_info
+select count(transaction_id) from transactions
+
+
+
+/* In customer table, rows: 5647
+In prod_cat_info, rows: 23
+In Transactions, rows: 23053*/
+
+--Q2 what are number of transactions that have a return?
+
+select count(qty) as count_TOT from transactions where qty<=-1
+select count(convert(float,total_amt)) as count_TOT from transactions where cast(Total_amt as float)<0
+
+
+
+--Q3 please convert the date variables into valid date format
+
+
+select transaction_id, cust_id, tran_date,CONVERT(date, tran_date, 103) as New_Tran_date, prod_subcat_code, prod_cat_code, Qty	Rate, Tax, total_amt, Store_type from transactions
+
+
+--Q4 what is the time range of the transaction data available for analysis?
+
+ select distinct year(New_Tran_date) as Years from (select CONVERT(date, tran_date, 103)  as New_Tran_date from transactions) as t1 order by years
+
+--Q5 what product category does the sub-category 'DIY' belong to?
+
+select prod_subcat,prod_cat_code, prod_cat from prod_cat_info where prod_subcat='DIY'
+
+
+--Q1 which channel is most frequently used for transactions? (ans: e-shop)
+select store_type, count(store_type) from transactions group by Store_type order by store_type
+
+--Q2 what is the count of male and female customers in database?
+select gender, count (gender) as count_gender from customer group by gender order by gender desc
+
+--Q3 from which city do we have the max no. of customers and how many?
+select Top 1 city_code, count(customer_id) as No_of_Cust from customer group by city_code
+
+--Q4 how many sub-categories are there under the books category?
+select prod_sub_cat_code, prod_subcat from prod_cat_info where prod_cat= 'Books'
+
+--Q5 what is the max quantity of products ever ordered?
+select max(qty) as Max_Qty from transactions
+
+--Q6 what is the net total revenue generated in categories electronics and books?
+select 
+t2.prod_cat as categories, 
+sum(convert(float,total_amt)) as Net_Revenue 
+from transactions as t1 
+left join prod_cat_info as t2 on 
+t1.prod_cat_code=t2.prod_cat_code 
+And t1.prod_subcat_code=t2.prod_sub_cat_code 
+where t2.prod_cat in ('electronics','books')
+group by t2.prod_cat
+
+
+--Q7 how many customers have >10 transactions with us, excluding the returns?
+
+select cust_id, 
+COUNT(cust_id) AS Count_of_Transactions
+from Transactions
+where Qty >= 0
+group by cust_id
+having COUNT(cust_id) > 10
+
+
+--Q8 what is the combined revenue earned from the 'electronics and clothing' categories, from 'flagship stores'?
+select 
+	 prod_cat as category,
+     sum(convert(float,total_amt)) as Net_Revenue 
+	 from Transactions T1
+     left join Prod_cat_info P1
+     on T1.prod_cat_code = P1.prod_cat_code
+     and T1.prod_subcat_code=P1.prod_sub_cat_code
+     where t1.Store_type ='flagship store' 
+	 and prod_cat in 
+     (select prod_Cat
+     from Prod_cat_info 
+     where prod_Cat in ('Electronics', 'clothing')
+    ) group by prod_cat
+
+--Q9 what is the total revenue generated from 'males customers in 'electronics' category? O/P should display total revenue by prod sub-cat
+
+SELECT prod_subcat as subcat, 
+    sum(convert(float,total_amt)) as total_revenue
+    from Transactions T1
+    left join Customer C1
+      on T1.cust_id = C1.customer_ID
+    left join Prod_cat_info P1
+      on T1.prod_cat_code = P1.prod_cat_code
+      and T1.prod_subcat_code=P1.prod_sub_cat_code
+    where Gender like 'M' and prod_Cat in (
+      select prod_Cat
+      from Prod_cat_info 
+      where prod_Cat like 'Electronics'
+    )
+    group by prod_subcat
+
+--Q10 what is the % of sales and returns by product sub category, display only top 5 sub categories in terms of sales?
+
+select Top 5
+	[Subcategory] = P.prod_subcat,
+	[Sales] =   Round(SUM(cast( case when T.Qty > 0 then T.Qty else 0 end as float)),2), 
+	[Returns] = Round(SUM(cast( case when T.Qty < 0 then T.Qty else 0 end as float)),2), 
+	[total qty]= Round(SUM(cast( case when T.Qty > 0 then T.Qty else 0 end as float)),2) 
+				- Round(SUM(cast( case when T.Qty < 0 then T.Qty   else 0 end as float)),2),
+
+    [%_Returs]= ((Round(SUM(cast( case when T.Qty < 0 then T.Qty  else 0 end as float)),2))/
+				(Round(SUM(cast( case when T.Qty > 0 then T.Qty else 0 end as float)),2)
+				- Round(SUM(cast( case when T.Qty < 0 then T.Qty   else 0 end as float)),2)))*100,
+
+    [%_sales]= ((Round(SUM(cast( case when T.Qty > 0 then T.Qty  else 0 end as float)),2))/
+               (Round(SUM(cast( case when T.Qty > 0 then T.Qty else 0 end as float)),2)
+               - Round(SUM(cast( case when T.Qty < 0 then T.Qty   else 0 end as float)),2)))*100
+from Transactions as T
+INNER JOIN prod_cat_info as P ON T.prod_subcat_code = P.prod_sub_cat_code
+group by P.prod_subcat
+order by [%_sales] desc
+
+--Q11: For all customers aged between 25 to 35 years find what is the net revenue generated by these consumers in last 30 days of transactions from max transaction date available in the data?
+
+SELECT sum(convert(float,t.total_amt)) as net_total_revenue
+FROM (SELECT t.*
+      FROM Transactions t
+     ) t 
+	 JOIN Customer c
+     ON t.cust_id = c.customer_Id
+WHERE convert(datetime, t.tran_date, 103) >= DATEADD(day, -30, '2014-02-28') AND 
+      convert(datetime, t.tran_date, 103) >= DATEADD(YEAR, 25, convert(datetime,c.DOB,103)) AND
+      convert(datetime, t.tran_date, 103) <= DATEADD(YEAR, 35, convert(datetime,c.DOB,103));
+
+
+--Q12: which product category has seen the max value of returns in the last 3 months of transactions?
+
+SELECT TOP 1
+    prod_cat_code, tran_date,
+	sum(convert (float,Total_amt)) as totalreturns
+    FROM TRANSACTIONS
+WHERE convert(datetime,tran_date,103) >= DATEADD(day, -90, '2014-02-28')
+    AND convert (float,Total_amt) < 0
+GROUP BY prod_cat_code, tran_date
+ORDER BY totalreturns 
+
+--Q13: which store-type sells the maximum products, by value of sales amount and by quantity sold?
+select top 1
+	store_type, 
+	round(sum (convert (float,total_amt)),2) as sum_total_amt, 
+	sum (convert(float,qty)) as sum_qty 
+	from transactions 
+	group by store_type
+	order by sum_total_amt desc
+
+--Q14: what are the categories for which average revenue is above the overall average
+
+SELECT p.prod_cat, round(AVG(convert(float,t.total_amt)),2) AS average 
+FROM (SELECT t.*, AVG(convert(float,t.total_amt)) OVER () as overall_average
+      FROM Transactions T
+     ) as t 
+	 inner JOIN
+     prod_cat_info P 
+     ON T.prod_cat_code = P.prod_cat_code
+GROUP BY p.prod_cat, overall_average
+HAVING AVG(convert(float,t.total_amt)) > overall_average;
+
+
+--Q15: find the average and total revenue by each subcategory for the categories which are among top 5 categories in terms of quantity sold
+
+select P.prod_subcat as Product_SubCategory, 
+AVG(cast(total_amt as float)) as Average_Revenue,
+SUM(cast(total_amt as float)) as Total_Revenue
+from Transactions as T
+INNER JOIN prod_Cat_info as P
+ON T.prod_cat_code = P.prod_cat_code AND T.prod_subcat_code = 
+P.prod_sub_cat_code
+WHERE P.prod_cat_code IN (
+select top 5 P.prod_cat_code
+from prod_cat_info as P
+inner join Transactions as T
+ON P.prod_cat_code = T.prod_cat_code AND P.prod_sub_cat_code = 
+T.prod_subcat_code
+group by P.prod_cat_code
+order by sum(Cast(Qty as int)) desc
+)
+group by P.prod_subcat
